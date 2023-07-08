@@ -22,16 +22,23 @@ class App {
     }
 
     #getPosition () {
-        if (navigator.geolocation)
-            navigator.geolocation.getCurrentPosition(this.#loadMap.bind(this), function () {
-                alert('Could not get your position');
-            });
+        // ACTUAL GEOLOCATION FEATURE
+        // if (navigator.geolocation)
+        //     navigator.geolocation.getCurrentPosition(this.#loadMap.bind(this), function () {
+        //         alert('Could not get your position');
+        //     });
+
+        // FAKE GEOLOCATION
+        this.#loadMap()
     }
 
     #loadMap (position) {
-        const { latitude, longitude } = position.coords;
-        const coords = [latitude, longitude];
+        // const { latitude, longitude } = position.coords;     // Enable for actual geolocation
 
+        const latitude = 12.8791619     // Delete when actual geolocation is enabled
+        const longitude = 77.6916485;    // Delete when actual geolocation is enabled
+
+        const coords = [latitude, longitude];
         this.#map = L.map('map').setView(coords, 15);
 
         L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
