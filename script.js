@@ -1,14 +1,10 @@
 'use strict';
 
-// prettier-ignore
-;
-
-
-
 class Workout {
     date = new Date();
     // id = (new Date() + '').slice(-10);
     id = this.randomId();
+    clicks = 0
 
     constructor(coords, distance, duration) {
         this.coords = coords;       // [lat, lng]
@@ -25,6 +21,10 @@ class Workout {
     // Generate random ID
     randomId (length = 10) {
         return Math.random().toString(36).substring(2, length + 2);
+    }
+
+    click () {
+        this.clicks++
     }
 }
 
@@ -49,9 +49,9 @@ class Running extends Workout {
 //////////////////  CYCLING CLASS
 class Cycling extends Workout {
     type = 'cycling';
-    constructor(coords, distance, duration, elevationGain) {
+    constructor(coords, distance, duration, elevation) {
         super(coords, distance, duration);
-        this.cadence = elevationGain;
+        this.elevation = elevation;
         this.calcSpeed();
         this._setDescription();
     }
@@ -83,34 +83,44 @@ const inputElevation = document.querySelector('.form__input--elevation');
 
 class App {
     #map;
+    #mapZoomLevel = 15;
     #mapEvent;
     #workouts = [];
 
     constructor() {
+        // Get user's position
         this.#getPosition();
+
+        // Get data from local storage
+        this.#getLocalStorage()
+
+        // Attached event handlers
         form.addEventListener('submit', this.#newWorkout.bind(this));
         inputType.addEventListener('change', this.#toggleElevationField);
+        containerWorkouts.addEventListener('click', this._moveToPopup.bind(this));
     }
 
     #getPosition () {
-        // ACTUAL GEOLOCATION FEATURE
-        // if (navigator.geolocation)
-        //     navigator.geolocation.getCurrentPosition(this.#loadMap.bind(this), function () {
-        //         alert('Could not get your position');
-        //     });
+        // Enable to ACTUAL GEOLOCATION FEATURE
+        if (navigator.geolocation)
+            navigator.geolocation.getCurrentPosition(this.#loadMap.bind(this), function () {
+                alert('Could not get your position');
+            });
 
-        // FAKE GEOLOCATION
-        this.#loadMap();
+        // Enable to FAKE GEOLOCATION - While working on ethernet instead of WiFi
+        // this.#loadMap();
     }
 
     #loadMap (position) {
-        // const { latitude, longitude } = position.coords;     // Enable for actual geolocation
+        // Disable to FAKE GEOLOCATION - While working on ethernet instead of WiFi
+        const { latitude, longitude } = position.coords;
 
-        const latitude = 12.8791619;     // Delete when actual geolocation is enabled
-        const longitude = 77.6916485;    // Delete when actual geolocation is enabled
+        // Enable to FAKE GEOLOCATION - While working on ethernet instead of WiFi
+        // const latitude = 12.8791619;     // Delete when actual geolocation is enabled
+        // const longitude = 77.6916485;    // Delete when actual geolocation is enabled
 
         const coords = [latitude, longitude];
-        this.#map = L.map('map').setView(coords, 15);
+        this.#map = L.map('map').setView(coords, this.#mapZoomLevel);
 
         L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
             attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
@@ -118,6 +128,10 @@ class App {
 
         // Handling click on map
         this.#map.on('click', this.#showForm.bind(this));
+
+        this.#workouts.forEach(workout => {
+            this.#renderWorkoutMarker(workout)
+        })
     }
 
     #showForm (mapE) {
@@ -126,13 +140,13 @@ class App {
         inputDistance.focus();
     }
 
-    _hideForm () {
+    #hideForm () {
         // Empty inputs
         inputDistance.value = inputDuration.value = inputCadence.value = inputElevation.value = '';
         // Hide form
-        form.style.display = 'none'
+        form.style.display = 'none';
         form.classList.add('hidden');
-        setTimeout(() => form.style.display = 'grid', 1000)
+        setTimeout(() => form.style.display = 'grid', 1000);
     }
 
     #toggleElevationField () {
@@ -141,11 +155,11 @@ class App {
     }
 
     #newWorkout (event) {
+        event.preventDefault();
+
         // Check if data is valid
         const validInput = (...inputs) => inputs.every(input => Number.isFinite(input));
         const isPositive = (...inputs) => inputs.every(input => input > 0);
-
-        event.preventDefault();
 
         // get data from form
         const type = inputType.value;
@@ -153,7 +167,6 @@ class App {
         const duration = +inputDuration.value;
         const { lat, lng } = this.#mapEvent.latlng;
         let workout;
-
 
         // If workout is running, create running object
         if (type === 'running') {
@@ -185,9 +198,11 @@ class App {
         // Render workout on list
         this.#renderWorkout(workout);
 
-        // Clear input fields
-        this._hideForm()
+        // Clear input and hide the form
+        this.#hideForm();
 
+        // Set local storage to all workouts
+        this.#setLocalStorage()
     }
 
     #renderWorkoutMarker (workout) {
@@ -238,13 +253,54 @@ class App {
             </div>
             <div class="workout__details">
                 <span class="workout__icon">⛰</span>
-                <span class="workout__value">${workout.elevationGain}</span>
+                <span class="workout__value">${workout.elevation}</span>
                 <span class="workout__unit">m</span>
             </div>
         </li>
-        `
+        `;
 
-        form.insertAdjacentHTML('afterend', html)
+        form.insertAdjacentHTML('afterend', html);
+    }
+
+    _moveToPopup (event) {
+        const workoutElement = event.target.closest('.workout');
+        // console.log(workoutElement);
+
+        if (!workoutElement) return;
+        const workout = this.#workouts.find(work => work.id === workoutElement.dataset.id);
+        // console.log(workout.id);
+
+        this.#map.setView(workout.coords, this.#mapZoomLevel, {
+            animate: true,
+            pan: {
+                duration: 1
+            }
+        });
+
+        // Public Interface - Enable following two lines to start using Class-Workout's click method as public interface
+        // workout.click()
+        // console.log(workout.clicks);
+    }
+
+    #setLocalStorage () {
+        localStorage.setItem('workouts', JSON.stringify(this.#workouts))
+    }
+
+    #getLocalStorage () {
+        const data = JSON.parse(localStorage.getItem('workouts'))
+
+        if (!data) return
+
+        this.#workouts = data
+        this.#workouts.forEach(workout => {
+            this.#renderWorkout(workout)
+            // this.#renderWorkoutMarker(workout)
+        })
+    }
+
+    reset () {
+        localStorage.removeItem('workouts')
+        location.reload()
     }
 }
 
